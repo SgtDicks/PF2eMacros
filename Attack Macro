@@ -1,0 +1,88 @@
+// Ensure there is exactly one token selected as the attacker
+if (canvas.tokens.controlled.length === 1) {
+    let attackerToken = canvas.tokens.controlled[0];
+    let attacker = attackerToken.actor;
+    if (!attacker) {
+        ui.notifications.warn("No attacker found for the selected token.");
+        return;
+    }
+
+    // Ensure a target is selected
+    if (game.user.targets.size !== 1) {
+        ui.notifications.warn("Please select exactly one target.");
+        return;
+    }
+
+    let targetToken = game.user.targets.values().next().value;
+    let target = targetToken.actor;
+    if (!target) {
+        ui.notifications.warn("No target found.");
+        return;
+    }
+
+    // Retrieve the target's AC - adjust the path according to your system
+    let targetAC = target.data.data.attributes.ac.value || 0; // Example path, adjust as needed
+
+    // Attempt to find the "Sparkblade" weapon in the attacker's items
+    let weaponName = "Sparkblade";
+    let weapon = attacker.items.find(i => i.type === "weapon" && i.name === weaponName);
+    if (!weapon) {
+        ui.notifications.warn(`${weaponName} not found on the attacker's character sheet.`);
+        return;
+    }
+
+    // Define flavor text options for the Sparkblade
+    let flavorTextOptions = [
+        "The Sparkblade crackles with arcane energy as it strikes!",
+        "Electricity arcs from the Sparkblade, illuminating the battlefield!",
+        "With a swift motion, the Sparkblade cuts through the enemy's defenses!",
+    ];
+
+    // Randomly select flavor text
+    let flavorText = flavorTextOptions[Math.floor(Math.random() * flavorTextOptions.length)];
+
+    // Dynamically fetch modifiers from the API
+    let abilityMod = attacker.data.data.abilities.dex.mod || 0; // Adjust path as needed
+    let level = attacker.data.data.details.level.value || 1; // Adjust path as needed
+    let proficiencyBonus = Math.floor((level - 1) / 4) + 2; // Calculate proficiency bonus based on level
+    let weaponPotencyBonus = weapon.data.data.potencyBonus || 0; // Adjust path as needed
+
+    // Log the modifiers to the console for debugging
+    console.log("Ability Mod:", abilityMod);
+    console.log("Level:", level);
+    console.log("Proficiency Bonus:", proficiencyBonus);
+    console.log("Weapon Potency Bonus:", weaponPotencyBonus);
+
+    // Calculate the total attack bonus
+    let totalAttackBonus = abilityMod + proficiencyBonus + weaponPotencyBonus;
+
+    // Formulate the attack roll
+    let attackRollFormula = `1d20 + ${totalAttackBonus}`;
+    let roll = new Roll(attackRollFormula);
+    await roll.evaluate({async: true}); // Ensure async execution
+
+    // Determine if the attack hits or misses without disclosing the target's AC
+    let hitOrMiss = roll.total >= targetAC ? "hits" : "misses";
+
+    // Construct the message content with dynamic modifiers and result
+    let messageContent = `
+        <strong>${attackerToken.name}'s ${weapon.name} Attack:</strong>
+        <ul>
+            <li>Modifiers: Ability (${abilityMod}), Proficiency (${proficiencyBonus}), Weapon Potency (${weaponPotencyBonus})</li>
+            <li>Attack Roll: ${roll.total}</li>
+            <li>Result: ${attackerToken.name} ${hitOrMiss} ${targetToken.name}</li>
+        </ul>
+        <p>${flavorText}</p>
+    `;
+
+    // Send the result message to chat with HTML formatting
+    ChatMessage.create({
+        speaker: ChatMessage.getSpeaker({ actor: attacker }),
+        content: messageContent,
+        type: CONST.CHAT_MESSAGE_TYPES.ROLL,
+        roll: roll
+    });
+
+} else {
+    ui.notifications.warn("Please select exactly one attacker token.");
+}
